@@ -9,49 +9,42 @@ interface MapProps {
 const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
-  const [mapboxToken, setMapboxToken] = useState<string>('');
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
-    const initializeMap = () => {
-      if (!mapboxToken) return;
-      
-      mapboxgl.accessToken = mapboxToken;
-      
-      map.current = new mapboxgl.Map({
-        container: mapContainer.current!,
-        style: 'mapbox://styles/mapbox/dark-v11',
-        center: [0, 0],
-        zoom: 1,
-        pitch: 45,
-        projection: 'globe'
+    mapboxgl.accessToken = 'pk.eyJ1IjoiZ2VuamVzcyIsImEiOiJjbTZsdDI2NnAwZDdvMmpwenJxZDIwemk0In0.J8bNiwGDV1rXvyzj0PkuRw';
+    
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current!,
+      style: 'mapbox://styles/mapbox/dark-v11',
+      center: [0, 0],
+      zoom: 1,
+      pitch: 45,
+      projection: 'globe'
+    });
+
+    map.current.addControl(
+      new mapboxgl.NavigationControl({
+        visualizePitch: true,
+      }),
+      'top-right'
+    );
+
+    map.current.on('style.load', () => {
+      map.current?.setFog({
+        color: 'rgb(186, 210, 235)',
+        'high-color': 'rgb(36, 92, 223)',
+        'horizon-blend': 0.02,
+        'space-color': 'rgb(11, 11, 25)',
+        'star-intensity': 0.6
       });
-
-      map.current.addControl(
-        new mapboxgl.NavigationControl({
-          visualizePitch: true,
-        }),
-        'top-right'
-      );
-
-      map.current.on('style.load', () => {
-        map.current?.setFog({
-          color: 'rgb(186, 210, 235)',
-          'high-color': 'rgb(36, 92, 223)',
-          'horizon-blend': 0.02,
-          'space-color': 'rgb(11, 11, 25)',
-          'star-intensity': 0.6
-        });
-      });
-    };
-
-    initializeMap();
+    });
 
     return () => {
       map.current?.remove();
     };
-  }, [mapboxToken]);
+  }, []);
 
   useEffect(() => {
     if (!map.current || !geoJsonData) return;
@@ -90,18 +83,6 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
 
   return (
     <div className="relative w-full h-full min-h-[500px]">
-      {!mapboxToken && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-10">
-          <div className="p-4 bg-card rounded-lg shadow-lg">
-            <input
-              type="text"
-              placeholder="Enter your Mapbox token"
-              className="px-4 py-2 border rounded"
-              onChange={(e) => setMapboxToken(e.target.value)}
-            />
-          </div>
-        </div>
-      )}
       <div ref={mapContainer} className="absolute inset-0 rounded-lg overflow-hidden" />
     </div>
   );
