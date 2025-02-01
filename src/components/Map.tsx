@@ -50,7 +50,7 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   }, []);
 
   useEffect(() => {
-    if (!map || !geoJsonData) return;
+    if (!map || !geoJsonData || !geoJsonData.features || geoJsonData.features.length === 0) return;
 
     if (map.getSource('locations')) {
       (map.getSource('locations') as mapboxgl.GeoJSONSource).setData(geoJsonData);
@@ -70,9 +70,15 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
           'circle-opacity': 0.8
         }
       });
+    }
 
-      const coordinates = geoJsonData.features.map((f: any) => f.geometry.coordinates);
-      const bounds = coordinates.reduce((bounds: any, coord: number[]) => {
+    // Only try to fit bounds if we have valid coordinates
+    const coordinates = geoJsonData.features
+      .map((f: any) => f.geometry.coordinates)
+      .filter((coord: number[]) => coord && coord.length === 2);
+
+    if (coordinates.length > 0) {
+      const bounds = coordinates.reduce((bounds: mapboxgl.LngLatBounds, coord: number[]) => {
         return bounds.extend(coord);
       }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
 
