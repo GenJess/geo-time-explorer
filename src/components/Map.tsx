@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -8,14 +8,14 @@ interface MapProps {
 
 const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<mapboxgl.Map | null>(null);
+  const mapInstance = useRef<mapboxgl.Map | null>(null);
 
   useEffect(() => {
-    if (!mapContainer.current || map) return;
+    if (!mapContainer.current || mapInstance.current) return;
 
     mapboxgl.accessToken = 'pk.eyJ1IjoiZ2VuamVzcyIsImEiOiJjbTZsdDI2NnAwZDdvMmpwenJxZDIwemk0In0.J8bNiwGDV1rXvyzj0PkuRw';
     
-    const newMap = new mapboxgl.Map({
+    mapInstance.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/dark-v11',
       center: [0, 0],
@@ -24,15 +24,15 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       projection: 'globe'
     });
 
-    newMap.addControl(
+    mapInstance.current.addControl(
       new mapboxgl.NavigationControl({
         visualizePitch: true,
       }),
       'top-right'
     );
 
-    newMap.on('style.load', () => {
-      newMap.setFog({
+    mapInstance.current.on('style.load', () => {
+      mapInstance.current?.setFog({
         color: 'rgb(186, 210, 235)',
         'high-color': 'rgb(36, 92, 223)',
         'horizon-blend': 0.02,
@@ -41,16 +41,16 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       });
     });
 
-    setMap(newMap);
-
     return () => {
-      newMap.remove();
-      setMap(null);
+      mapInstance.current?.remove();
+      mapInstance.current = null;
     };
   }, []);
 
   useEffect(() => {
-    if (!map || !geoJsonData || !geoJsonData.features || geoJsonData.features.length === 0) return;
+    if (!mapInstance.current || !geoJsonData || !geoJsonData.features || geoJsonData.features.length === 0) return;
+
+    const map = mapInstance.current;
 
     // Remove existing layers and sources if they exist
     if (map.getLayer('locations')) {
@@ -98,7 +98,7 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
         duration: 1000
       });
     }
-  }, [geoJsonData, map]);
+  }, [geoJsonData]);
 
   return (
     <div className="relative w-full h-full min-h-[500px]">
