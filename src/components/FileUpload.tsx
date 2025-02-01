@@ -13,40 +13,64 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileProcessed }) => {
       const text = await file.text();
       const data = JSON.parse(text);
       
-      // Basic validation of Google Timeline JSON
-      if (!data.locations || !Array.isArray(data.locations)) {
-        throw new Error('Invalid file format');
-      }
-
       // Convert to GeoJSON
+      const features: any[] = [];
+      
+      // Process each entry in the JSON array
+      data.forEach((entry: any) => {
+        // Handle timeline paths
+        if (entry.timelinePath) {
+          entry.timelinePath.forEach((path: any) => {
+            if (path.point) {
+              const [lat, lng] = path.point.replace('geo:', '').split(',').map(Number);
+              features.push({
+                type: 'Feature',
+                geometry: {
+                  type: 'Point',
+                  coordinates: [lng, lat]
+                },
+                properties: {
+                  timestamp: entry.startTime,
+                  durationOffset: path.durationMinutesOffsetFromStartTime
+                }
+              });
+            }
+          });
+        }
+        // Handle visit locations
+        else if (entry.visit?.topCandidate?.placeLocation) {
+          const [lat, lng] = entry.visit.topCandidate.placeLocation.replace('geo:', '').split(',').map(Number);
+          features.push({
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [lng, lat]
+            },
+            properties: {
+              timestamp: entry.startTime,
+              endTime: entry.endTime,
+              semanticType: entry.visit.topCandidate.semanticType,
+              probability: entry.visit.topCandidate.probability
+            }
+          });
+        }
+      });
+
       const geoJson = {
         type: 'FeatureCollection',
-        features: data.locations.map((loc: any) => ({
-          type: 'Feature',
-          geometry: {
-            type: 'Point',
-            coordinates: [
-              loc.longitudeE7 / 1e7,
-              loc.latitudeE7 / 1e7
-            ]
-          },
-          properties: {
-            timestamp: loc.timestamp,
-            accuracy: loc.accuracy
-          }
-        }))
+        features
       };
 
       onFileProcessed(geoJson);
       toast({
         title: "Success",
-        description: "File processed successfully",
+        description: `Processed ${features.length} locations successfully`,
       });
     } catch (error) {
       console.error('Error processing file:', error);
       toast({
         title: "Error",
-        description: "Failed to process file. Please ensure it's a valid Google Timeline JSON.",
+        description: "Failed to process file. Please ensure it's a valid JSON file.",
         variant: "destructive",
       });
     }
