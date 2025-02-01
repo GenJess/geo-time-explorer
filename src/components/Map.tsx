@@ -15,8 +15,8 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
 
     mapboxgl.accessToken = 'pk.eyJ1IjoiZ2VuamVzcyIsImEiOiJjbTZsdDI2NnAwZDdvMmpwenJxZDIwemk0In0.J8bNiwGDV1rXvyzj0PkuRw';
     
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current!,
+    const newMap = new mapboxgl.Map({
+      container: mapContainer.current,
       style: 'mapbox://styles/mapbox/dark-v11',
       center: [0, 0],
       zoom: 1,
@@ -24,15 +24,15 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       projection: 'globe'
     });
 
-    map.current.addControl(
+    newMap.addControl(
       new mapboxgl.NavigationControl({
         visualizePitch: true,
       }),
       'top-right'
     );
 
-    map.current.on('style.load', () => {
-      map.current?.setFog({
+    newMap.on('style.load', () => {
+      newMap.setFog({
         color: 'rgb(186, 210, 235)',
         'high-color': 'rgb(36, 92, 223)',
         'horizon-blend': 0.02,
@@ -41,23 +41,30 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       });
     });
 
+    map.current = newMap;
+
     return () => {
-      map.current?.remove();
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
     };
   }, []);
 
   useEffect(() => {
     if (!map.current || !geoJsonData) return;
 
-    if (map.current.getSource('locations')) {
-      (map.current.getSource('locations') as mapboxgl.GeoJSONSource).setData(geoJsonData);
+    const currentMap = map.current;
+
+    if (currentMap.getSource('locations')) {
+      (currentMap.getSource('locations') as mapboxgl.GeoJSONSource).setData(geoJsonData);
     } else {
-      map.current.addSource('locations', {
+      currentMap.addSource('locations', {
         type: 'geojson',
         data: geoJsonData
       });
 
-      map.current.addLayer({
+      currentMap.addLayer({
         id: 'locations',
         type: 'circle',
         source: 'locations',
@@ -68,13 +75,12 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
         }
       });
 
-      // Fit bounds to the data
       const coordinates = geoJsonData.features.map((f: any) => f.geometry.coordinates);
       const bounds = coordinates.reduce((bounds: any, coord: number[]) => {
         return bounds.extend(coord);
       }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
 
-      map.current.fitBounds(bounds, {
+      currentMap.fitBounds(bounds, {
         padding: 50,
         duration: 1000
       });
