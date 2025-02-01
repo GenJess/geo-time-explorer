@@ -9,13 +9,14 @@ interface MapProps {
 const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<mapboxgl.Map | null>(null);
+  const sourceAdded = useRef<boolean>(false);
 
   useEffect(() => {
     if (!mapContainer.current || mapInstance.current) return;
 
     mapboxgl.accessToken = 'pk.eyJ1IjoiZ2VuamVzcyIsImEiOiJjbTZsdDI2NnAwZDdvMmpwenJxZDIwemk0In0.J8bNiwGDV1rXvyzj0PkuRw';
     
-    mapInstance.current = new mapboxgl.Map({
+    const map = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/dark-v11',
       center: [0, 0],
@@ -24,15 +25,15 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       projection: 'globe'
     });
 
-    mapInstance.current.addControl(
+    map.addControl(
       new mapboxgl.NavigationControl({
         visualizePitch: true,
       }),
       'top-right'
     );
 
-    mapInstance.current.on('style.load', () => {
-      mapInstance.current?.setFog({
+    map.on('style.load', () => {
+      map.setFog({
         color: 'rgb(186, 210, 235)',
         'high-color': 'rgb(36, 92, 223)',
         'horizon-blend': 0.02,
@@ -41,63 +42,80 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       });
     });
 
+    mapInstance.current = map;
+
     return () => {
-      mapInstance.current?.remove();
-      mapInstance.current = null;
+      if (mapInstance.current) {
+        mapInstance.current.remove();
+        mapInstance.current = null;
+      }
+      sourceAdded.current = false;
     };
   }, []);
 
   useEffect(() => {
-    if (!mapInstance.current || !geoJsonData || !geoJsonData.features || geoJsonData.features.length === 0) return;
-
     const map = mapInstance.current;
+    if (!map || !geoJsonData?.features?.length) return;
 
-    // Remove existing layers and sources if they exist
-    if (map.getLayer('locations')) {
-      map.removeLayer('locations');
-    }
-    if (map.getSource('locations')) {
-      map.removeSource('locations');
-    }
-
-    // Add new source and layer
-    map.addSource('locations', {
-      type: 'geojson',
-      data: geoJsonData
-    });
-
-    map.addLayer({
-      id: 'locations',
-      type: 'circle',
-      source: 'locations',
-      paint: {
-        'circle-radius': 6,
-        'circle-color': '#4A90E2',
-        'circle-opacity': 0.8,
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#FFFFFF'
+    const cleanup = () => {
+      if (map.getLayer('locations')) {
+        map.removeLayer('locations');
       }
-    });
+      if (map.getSource('locations')) {
+        map.removeSource('locations');
+      }
+      sourceAdded.current = false;
+    };
 
-    // Calculate bounds from valid coordinates
-    const validFeatures = geoJsonData.features.filter(
-      (f: any) => f.geometry && f.geometry.coordinates && 
-      Array.isArray(f.geometry.coordinates) && 
-      f.geometry.coordinates.length === 2
-    );
+    // Clean up existing layers and sources
+    cleanup();
 
-    if (validFeatures.length > 0) {
-      const bounds = new mapboxgl.LngLatBounds();
-      
-      validFeatures.forEach((feature: any) => {
-        bounds.extend(feature.geometry.coordinates as [number, number]);
+    try {
+      // Add new source and layer
+      map.addSource('locations', {
+        type: 'geojson',
+        data: geoJsonData
+      });
+      sourceAdded.current = true;
+
+      map.addLayer({
+        id: 'locations',
+        type: 'circle',
+        source: 'locations',
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#4A90E2',
+          'circle-opacity': 0.8,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#FFFFFF'
+        }
       });
 
-      map.fitBounds(bounds, {
-        padding: 50,
-        duration: 1000
-      });
+      // Calculate bounds from valid coordinates
+      const validFeatures = geoJsonData.features.filter(
+        (f: any) => f.geometry && 
+                    f.geometry.coordinates && 
+                    Array.isArray(f.geometry.coordinates) && 
+                    f.geometry.coordinates.length === 2
+      );
+
+      if (validFeatures.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        validFeatures.forEach((feature: any) => {
+          bounds.extend(feature.geometry.coordinates as [number, number]);
+        });
+
+        map.fitBounds(bounds, {
+          padding: 50,
+          duration: 1000
+        });
+      }
+    } catch (error) {
+      console.error('Error updating map:', error);
+      cleanup();
     }
+
+    return cleanup;
   }, [geoJsonData]);
 
   return (
