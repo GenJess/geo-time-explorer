@@ -52,35 +52,46 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   useEffect(() => {
     if (!map || !geoJsonData || !geoJsonData.features || geoJsonData.features.length === 0) return;
 
+    // Remove existing layers and sources if they exist
+    if (map.getLayer('locations')) {
+      map.removeLayer('locations');
+    }
     if (map.getSource('locations')) {
-      (map.getSource('locations') as mapboxgl.GeoJSONSource).setData(geoJsonData);
-    } else {
-      map.addSource('locations', {
-        type: 'geojson',
-        data: geoJsonData
-      });
-
-      map.addLayer({
-        id: 'locations',
-        type: 'circle',
-        source: 'locations',
-        paint: {
-          'circle-radius': 6,
-          'circle-color': '#4A90E2',
-          'circle-opacity': 0.8
-        }
-      });
+      map.removeSource('locations');
     }
 
-    // Only try to fit bounds if we have valid coordinates
-    const coordinates = geoJsonData.features
-      .map((f: any) => f.geometry.coordinates)
-      .filter((coord: number[]) => coord && coord.length === 2);
+    // Add new source and layer
+    map.addSource('locations', {
+      type: 'geojson',
+      data: geoJsonData
+    });
 
-    if (coordinates.length > 0) {
-      const bounds = coordinates.reduce((bounds: mapboxgl.LngLatBounds, coord: number[]) => {
-        return bounds.extend(coord);
-      }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
+    map.addLayer({
+      id: 'locations',
+      type: 'circle',
+      source: 'locations',
+      paint: {
+        'circle-radius': 6,
+        'circle-color': '#4A90E2',
+        'circle-opacity': 0.8,
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#FFFFFF'
+      }
+    });
+
+    // Calculate bounds from valid coordinates
+    const validFeatures = geoJsonData.features.filter(
+      (f: any) => f.geometry && f.geometry.coordinates && 
+      Array.isArray(f.geometry.coordinates) && 
+      f.geometry.coordinates.length === 2
+    );
+
+    if (validFeatures.length > 0) {
+      const bounds = new mapboxgl.LngLatBounds();
+      
+      validFeatures.forEach((feature: any) => {
+        bounds.extend(feature.geometry.coordinates as [number, number]);
+      });
 
       map.fitBounds(bounds, {
         padding: 50,
