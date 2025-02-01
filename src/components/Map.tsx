@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -8,15 +8,16 @@ interface MapProps {
 
 const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<mapboxgl.Map | null>(null);
-  const sourceAdded = useRef<boolean>(false);
+  const map = useRef<mapboxgl.Map | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
 
+  // Initialize map
   useEffect(() => {
-    if (!mapContainer.current || mapInstance.current) return;
+    if (!mapContainer.current || map.current) return;
 
     mapboxgl.accessToken = 'pk.eyJ1IjoiZ2VuamVzcyIsImEiOiJjbTZsdDI2NnAwZDdvMmpwenJxZDIwemk0In0.J8bNiwGDV1rXvyzj0PkuRw';
     
-    const map = new mapboxgl.Map({
+    const newMap = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/dark-v11',
       center: [0, 0],
@@ -25,60 +26,57 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       projection: 'globe'
     });
 
-    map.addControl(
+    newMap.addControl(
       new mapboxgl.NavigationControl({
         visualizePitch: true,
       }),
       'top-right'
     );
 
-    map.on('style.load', () => {
-      map.setFog({
+    newMap.on('load', () => {
+      newMap.setFog({
         color: 'rgb(186, 210, 235)',
         'high-color': 'rgb(36, 92, 223)',
         'horizon-blend': 0.02,
         'space-color': 'rgb(11, 11, 25)',
         'star-intensity': 0.6
       });
+      setMapLoaded(true);
     });
 
-    mapInstance.current = map;
+    map.current = newMap;
 
     return () => {
-      if (mapInstance.current) {
-        mapInstance.current.remove();
-        mapInstance.current = null;
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+        setMapLoaded(false);
       }
-      sourceAdded.current = false;
     };
   }, []);
 
+  // Handle data updates
   useEffect(() => {
-    const map = mapInstance.current;
-    if (!map || !geoJsonData?.features?.length) return;
+    if (!map.current || !mapLoaded || !geoJsonData?.features?.length) return;
 
-    const cleanup = () => {
-      if (map.getLayer('locations')) {
-        map.removeLayer('locations');
-      }
-      if (map.getSource('locations')) {
-        map.removeSource('locations');
-      }
-      sourceAdded.current = false;
-    };
-
-    // Clean up existing layers and sources
-    cleanup();
+    const currentMap = map.current;
 
     try {
+      // Clean up existing layers and sources
+      if (currentMap.getLayer('locations')) {
+        currentMap.removeLayer('locations');
+      }
+      if (currentMap.getSource('locations')) {
+        currentMap.removeSource('locations');
+      }
+
       // Add new source and layer
-      map.addSource('locations', {
+      currentMap.addSource('locations', {
         type: 'geojson',
         data: geoJsonData
       });
-      sourceAdded.current = true;
 
-      map.addLayer({
+      currentMap.addLayer({
         id: 'locations',
         type: 'circle',
         source: 'locations',
@@ -91,7 +89,7 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
         }
       });
 
-      // Calculate bounds from valid coordinates
+      // Calculate bounds
       const validFeatures = geoJsonData.features.filter(
         (f: any) => f.geometry && 
                     f.geometry.coordinates && 
@@ -105,18 +103,15 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
           bounds.extend(feature.geometry.coordinates as [number, number]);
         });
 
-        map.fitBounds(bounds, {
+        currentMap.fitBounds(bounds, {
           padding: 50,
           duration: 1000
         });
       }
     } catch (error) {
       console.error('Error updating map:', error);
-      cleanup();
     }
-
-    return cleanup;
-  }, [geoJsonData]);
+  }, [geoJsonData, mapLoaded]);
 
   return (
     <div className="relative w-full h-full min-h-[500px]">
