@@ -8,10 +8,10 @@ interface MapProps {
 
 const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
+  const [map, setMap] = useState<mapboxgl.Map | null>(null);
 
   useEffect(() => {
-    if (!mapContainer.current || map.current) return;
+    if (!mapContainer.current || map) return;
 
     mapboxgl.accessToken = 'pk.eyJ1IjoiZ2VuamVzcyIsImEiOiJjbTZsdDI2NnAwZDdvMmpwenJxZDIwemk0In0.J8bNiwGDV1rXvyzj0PkuRw';
     
@@ -41,30 +41,26 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       });
     });
 
-    map.current = newMap;
+    setMap(newMap);
 
     return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
-      }
+      newMap.remove();
+      setMap(null);
     };
   }, []);
 
   useEffect(() => {
-    if (!map.current || !geoJsonData) return;
+    if (!map || !geoJsonData) return;
 
-    const currentMap = map.current;
-
-    if (currentMap.getSource('locations')) {
-      (currentMap.getSource('locations') as mapboxgl.GeoJSONSource).setData(geoJsonData);
+    if (map.getSource('locations')) {
+      (map.getSource('locations') as mapboxgl.GeoJSONSource).setData(geoJsonData);
     } else {
-      currentMap.addSource('locations', {
+      map.addSource('locations', {
         type: 'geojson',
         data: geoJsonData
       });
 
-      currentMap.addLayer({
+      map.addLayer({
         id: 'locations',
         type: 'circle',
         source: 'locations',
@@ -80,12 +76,12 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
         return bounds.extend(coord);
       }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
 
-      currentMap.fitBounds(bounds, {
+      map.fitBounds(bounds, {
         padding: 50,
         duration: 1000
       });
     }
-  }, [geoJsonData]);
+  }, [geoJsonData, map]);
 
   return (
     <div className="relative w-full h-full min-h-[500px]">
