@@ -46,12 +46,12 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       
       if (feature.properties.semanticType?.toLowerCase().includes('transport') ||
           feature.properties.semanticType?.toLowerCase().includes('moving')) {
-        transports.push(feature as LocationFeature);
+        transports.push(feature as unknown as LocationFeature);
       } else {
         // Only keep the most recent visit to this location
         if (!uniqueLocationsMap.has(key) || 
             new Date(feature.properties.timestamp) > new Date(uniqueLocationsMap.get(key)!.properties.timestamp)) {
-          uniqueLocationsMap.set(key, feature as LocationFeature);
+          uniqueLocationsMap.set(key, feature as unknown as LocationFeature);
         }
       }
     }
@@ -114,8 +114,8 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
     newMap.on('click', 'locations', (e) => {
       if (!e.features?.[0]) return;
       
-      const feature = e.features[0] as LocationFeature;
-      const coordinates = [...feature.geometry.coordinates];
+      const feature = e.features[0] as unknown as LocationFeature;
+      const coordinates: [number, number] = [...feature.geometry.coordinates];
       const properties = feature.properties;
       
       const startTime = new Date(properties.timestamp).toLocaleString();
