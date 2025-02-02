@@ -23,43 +23,51 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileProcessed }) => {
           entry.timelinePath.forEach((path: any) => {
             if (path.point) {
               const [lat, lng] = path.point.replace('geo:', '').split(',').map(Number);
-              features.push({
-                type: 'Feature',
-                geometry: {
-                  type: 'Point',
-                  coordinates: [lng, lat]
-                },
-                properties: {
-                  timestamp: entry.startTime,
-                  durationOffset: path.durationMinutesOffsetFromStartTime
-                }
-              });
+              if (!isNaN(lat) && !isNaN(lng)) {
+                features.push({
+                  type: 'Feature',
+                  geometry: {
+                    type: 'Point',
+                    coordinates: [lng, lat] // Note: GeoJSON uses [longitude, latitude]
+                  },
+                  properties: {
+                    timestamp: entry.startTime,
+                    durationOffset: path.durationMinutesOffsetFromStartTime
+                  }
+                });
+              }
             }
           });
         }
         // Handle visit locations
         else if (entry.visit?.topCandidate?.placeLocation) {
           const [lat, lng] = entry.visit.topCandidate.placeLocation.replace('geo:', '').split(',').map(Number);
-          features.push({
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: [lng, lat]
-            },
-            properties: {
-              timestamp: entry.startTime,
-              endTime: entry.endTime,
-              semanticType: entry.visit.topCandidate.semanticType,
-              probability: entry.visit.topCandidate.probability
-            }
-          });
+          if (!isNaN(lat) && !isNaN(lng)) {
+            features.push({
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [lng, lat] // Note: GeoJSON uses [longitude, latitude]
+              },
+              properties: {
+                timestamp: entry.startTime,
+                endTime: entry.endTime,
+                semanticType: entry.visit.topCandidate.semanticType,
+                probability: entry.visit.topCandidate.probability
+              }
+            });
+          }
         }
       });
+
+      console.log('Processed features:', features.length);
 
       const geoJson = {
         type: 'FeatureCollection',
         features
       };
+
+      console.log('First feature:', features[0]);
 
       onFileProcessed(geoJson);
       toast({

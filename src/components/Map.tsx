@@ -10,11 +10,13 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const sourceAdded = useRef(false);
 
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
+    console.log('Initializing map...');
     mapboxgl.accessToken = 'pk.eyJ1IjoiZ2VuamVzcyIsImEiOiJjbTZsdDI2NnAwZDdvMmpwenJxZDIwemk0In0.J8bNiwGDV1rXvyzj0PkuRw';
     
     const newMap = new mapboxgl.Map({
@@ -34,6 +36,7 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
     );
 
     newMap.on('load', () => {
+      console.log('Map loaded');
       newMap.setFog({
         color: 'rgb(186, 210, 235)',
         'high-color': 'rgb(36, 92, 223)',
@@ -47,17 +50,31 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
     map.current = newMap;
 
     return () => {
+      console.log('Cleaning up map...');
       if (map.current) {
         map.current.remove();
         map.current = null;
         setMapLoaded(false);
+        sourceAdded.current = false;
       }
     };
   }, []);
 
   // Handle data updates
   useEffect(() => {
-    if (!map.current || !mapLoaded || !geoJsonData?.features?.length) return;
+    if (!map.current || !mapLoaded || !geoJsonData?.features?.length) {
+      console.log('Skipping data update:', {
+        hasMap: !!map.current,
+        isLoaded: mapLoaded,
+        features: geoJsonData?.features?.length
+      });
+      return;
+    }
+
+    console.log('Updating map with data:', {
+      featureCount: geoJsonData.features.length,
+      firstFeature: geoJsonData.features[0]
+    });
 
     const currentMap = map.current;
 
@@ -89,13 +106,25 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
         }
       });
 
+      sourceAdded.current = true;
+
       // Calculate bounds
       const validFeatures = geoJsonData.features.filter(
-        (f: any) => f.geometry && 
+        (f: any) => {
+          const isValid = f.geometry && 
                     f.geometry.coordinates && 
                     Array.isArray(f.geometry.coordinates) && 
-                    f.geometry.coordinates.length === 2
+                    f.geometry.coordinates.length === 2 &&
+                    !isNaN(f.geometry.coordinates[0]) &&
+                    !isNaN(f.geometry.coordinates[1]);
+          if (!isValid) {
+            console.warn('Invalid feature:', f);
+          }
+          return isValid;
+        }
       );
+
+      console.log('Valid features:', validFeatures.length);
 
       if (validFeatures.length > 0) {
         const bounds = new mapboxgl.LngLatBounds();
