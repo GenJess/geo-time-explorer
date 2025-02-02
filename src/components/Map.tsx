@@ -24,7 +24,44 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [showTransports, setShowTransports] = useState(false);
   const sourceAdded = useRef(false);
+
+  // Process data to separate static locations and transports
+  const processData = (data: any) => {
+    if (!data?.features) return { locations: null, transports: null };
+
+    // Create a Map to store unique locations based on coordinates
+    const uniqueLocations = new Map();
+    const transports = [];
+
+    for (const feature of data.features) {
+      const coords = feature.geometry.coordinates;
+      const key = `${coords[0]},${coords[1]}`;
+      
+      if (feature.properties.semanticType?.toLowerCase().includes('transport') ||
+          feature.properties.semanticType?.toLowerCase().includes('moving')) {
+        transports.push(feature);
+      } else {
+        // Only keep the most recent visit to this location
+        if (!uniqueLocations.has(key) || 
+            new Date(feature.properties.timestamp) > new Date(uniqueLocations.get(key).properties.timestamp)) {
+          uniqueLocations.set(key, feature);
+        }
+      }
+    }
+
+    return {
+      locations: {
+        type: 'FeatureCollection',
+        features: Array.from(uniqueLocations.values())
+      },
+      transports: {
+        type: 'FeatureCollection',
+        features: transports
+      }
+    };
+  };
 
   // Initialize map
   useEffect(() => {
@@ -49,6 +86,13 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       'top-right'
     );
 
+    // Add toggle control for transports
+    const toggleControl = document.createElement('button');
+    toggleControl.className = 'mapboxgl-ctrl-group mapboxgl-ctrl transport-toggle';
+    toggleControl.innerHTML = 'Toggle Transports';
+    toggleControl.onclick = () => setShowTransports(prev => !prev);
+    newMap.getContainer().appendChild(toggleControl);
+
     newMap.on('load', () => {
       console.log('Map loaded');
       newMap.setFog({
@@ -65,10 +109,10 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
     newMap.on('click', 'locations', (e) => {
       if (!e.features?.[0]) return;
       
-      const coordinates = (e.features[0].geometry as { coordinates: [number, number] }).coordinates.slice();
+      const geometry = e.features[0].geometry as { coordinates: [number, number] };
+      const coordinates = [...geometry.coordinates];
       const properties = e.features[0].properties;
       
-      // Format the popup content
       const startTime = new Date(properties.timestamp).toLocaleString();
       const endTime = properties.endTime ? new Date(properties.endTime).toLocaleString() : 'N/A';
       const locationType = properties.semanticType || 'Unknown location type';
@@ -87,7 +131,7 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
         closeOnClick: true,
         maxWidth: '300px'
       })
-        .setLngLat(coordinates)
+        .setLngLat(coordinates as [number, number])
         .setHTML(popupContent)
         .addTo(newMap);
     });
@@ -129,26 +173,31 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       return;
     }
 
+    const { locations, transports } = processData(geoJsonData);
+    if (!locations) return;
+
     console.log('Updating map with data:', {
-      featureCount: geoJsonData.features.length,
-      firstFeature: geoJsonData.features[0]
+      locationCount: locations.features.length,
+      transportCount: transports?.features.length
     });
 
     const currentMap = map.current;
 
     try {
       // Clean up existing layers and sources
-      if (currentMap.getLayer('locations')) {
-        currentMap.removeLayer('locations');
-      }
-      if (currentMap.getSource('locations')) {
-        currentMap.removeSource('locations');
-      }
+      ['locations', 'transports'].forEach(layer => {
+        if (currentMap.getLayer(layer)) {
+          currentMap.removeLayer(layer);
+        }
+        if (currentMap.getSource(layer)) {
+          currentMap.removeSource(layer);
+        }
+      });
 
-      // Add new source and layer with animations
+      // Add locations source and layer
       currentMap.addSource('locations', {
         type: 'geojson',
-        data: geoJsonData
+        data: locations
       });
 
       currentMap.addLayer({
@@ -164,46 +213,42 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
             22, 8
           ],
           'circle-color': '#4A90E2',
-          'circle-opacity': [
-            'case',
-            ['boolean', ['feature-state', 'hover'], false],
-            1,
-            0.8
-          ],
+          'circle-opacity': 0.8,
           'circle-stroke-width': 2,
           'circle-stroke-color': '#FFFFFF',
-          'circle-stroke-opacity': [
-            'case',
-            ['boolean', ['feature-state', 'hover'], false],
-            1,
-            0.6
-          ]
+          'circle-stroke-opacity': 0.6
         }
       });
 
+      // Add transports source and layer if available
+      if (transports && showTransports) {
+        currentMap.addSource('transports', {
+          type: 'geojson',
+          data: transports
+        });
+
+        currentMap.addLayer({
+          id: 'transports',
+          type: 'line',
+          source: 'transports',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': '#FF4B4B',
+            'line-width': 2,
+            'line-opacity': 0.6
+          }
+        });
+      }
+
       sourceAdded.current = true;
 
-      // Calculate bounds
-      const validFeatures = geoJsonData.features.filter(
-        (f: any) => {
-          const isValid = f.geometry && 
-                    f.geometry.coordinates && 
-                    Array.isArray(f.geometry.coordinates) && 
-                    f.geometry.coordinates.length === 2 &&
-                    !isNaN(f.geometry.coordinates[0]) &&
-                    !isNaN(f.geometry.coordinates[1]);
-          if (!isValid) {
-            console.warn('Invalid feature:', f);
-          }
-          return isValid;
-        }
-      );
-
-      console.log('Valid features:', validFeatures.length);
-
-      if (validFeatures.length > 0) {
+      // Calculate bounds for locations
+      if (locations.features.length > 0) {
         const bounds = new mapboxgl.LngLatBounds();
-        validFeatures.forEach((feature: any) => {
+        locations.features.forEach((feature: any) => {
           bounds.extend(feature.geometry.coordinates as [number, number]);
         });
 
@@ -216,12 +261,13 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
     } catch (error) {
       console.error('Error updating map:', error);
     }
-  }, [geoJsonData, mapLoaded]);
+  }, [geoJsonData, mapLoaded, showTransports]);
 
   return (
     <div className="relative w-full h-full min-h-[500px]">
       <div ref={mapContainer} className="absolute inset-0 rounded-lg overflow-hidden" />
-      <style>{`
+      <style>
+        {`
         .location-popup {
           @apply bg-background border border-border rounded-lg shadow-lg;
         }
@@ -234,7 +280,15 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
         .location-popup .mapboxgl-popup-tip {
           @apply border-t-background;
         }
-      `}</style>
+        .transport-toggle {
+          @apply px-2 py-1 bg-background text-foreground border border-border rounded shadow-sm hover:bg-accent transition-colors;
+          position: absolute;
+          top: 10px;
+          left: 10px;
+          z-index: 1;
+        }
+        `}
+      </style>
     </div>
   );
 };
