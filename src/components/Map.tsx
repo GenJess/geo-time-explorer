@@ -65,13 +65,13 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
     newMap.on('click', 'locations', (e) => {
       if (!e.features?.[0]) return;
       
-      const feature = e.features[0].properties;
-      const coordinates = e.features[0].geometry.coordinates.slice();
+      const coordinates = (e.features[0].geometry as { coordinates: [number, number] }).coordinates.slice();
+      const properties = e.features[0].properties;
       
       // Format the popup content
-      const startTime = new Date(feature.timestamp).toLocaleString();
-      const endTime = feature.endTime ? new Date(feature.endTime).toLocaleString() : 'N/A';
-      const locationType = feature.semanticType || 'Unknown location type';
+      const startTime = new Date(properties.timestamp).toLocaleString();
+      const endTime = properties.endTime ? new Date(properties.endTime).toLocaleString() : 'N/A';
+      const locationType = properties.semanticType || 'Unknown location type';
       
       const popupContent = `
         <div class="p-2">
@@ -87,7 +87,7 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
         closeOnClick: true,
         maxWidth: '300px'
       })
-        .setLngLat(coordinates as [number, number])
+        .setLngLat(coordinates)
         .setHTML(popupContent)
         .addTo(newMap);
     });
