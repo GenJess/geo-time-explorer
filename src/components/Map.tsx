@@ -20,6 +20,11 @@ interface LocationFeature {
   };
 }
 
+interface FeatureCollection {
+  type: 'FeatureCollection';
+  features: LocationFeature[];
+}
+
 const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -31,9 +36,9 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   const processData = (data: any) => {
     if (!data?.features) return { locations: null, transports: null };
 
-    // Create a Map to store unique locations based on coordinates
-    const uniqueLocations = new Map();
-    const transports = [];
+    // Create a map to store unique locations based on coordinates
+    const uniqueLocationsMap = new Map<string, LocationFeature>();
+    const transports: LocationFeature[] = [];
 
     for (const feature of data.features) {
       const coords = feature.geometry.coordinates;
@@ -41,23 +46,23 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       
       if (feature.properties.semanticType?.toLowerCase().includes('transport') ||
           feature.properties.semanticType?.toLowerCase().includes('moving')) {
-        transports.push(feature);
+        transports.push(feature as LocationFeature);
       } else {
         // Only keep the most recent visit to this location
-        if (!uniqueLocations.has(key) || 
-            new Date(feature.properties.timestamp) > new Date(uniqueLocations.get(key).properties.timestamp)) {
-          uniqueLocations.set(key, feature);
+        if (!uniqueLocationsMap.has(key) || 
+            new Date(feature.properties.timestamp) > new Date(uniqueLocationsMap.get(key)!.properties.timestamp)) {
+          uniqueLocationsMap.set(key, feature as LocationFeature);
         }
       }
     }
 
     return {
       locations: {
-        type: 'FeatureCollection',
-        features: Array.from(uniqueLocations.values())
+        type: 'FeatureCollection' as const,
+        features: Array.from(uniqueLocationsMap.values())
       },
       transports: {
-        type: 'FeatureCollection',
+        type: 'FeatureCollection' as const,
         features: transports
       }
     };
@@ -109,9 +114,9 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
     newMap.on('click', 'locations', (e) => {
       if (!e.features?.[0]) return;
       
-      const geometry = e.features[0].geometry as { coordinates: [number, number] };
-      const coordinates = [...geometry.coordinates];
-      const properties = e.features[0].properties;
+      const feature = e.features[0] as LocationFeature;
+      const coordinates = [...feature.geometry.coordinates];
+      const properties = feature.properties;
       
       const startTime = new Date(properties.timestamp).toLocaleString();
       const endTime = properties.endTime ? new Date(properties.endTime).toLocaleString() : 'N/A';
@@ -131,7 +136,7 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
         closeOnClick: true,
         maxWidth: '300px'
       })
-        .setLngLat(coordinates as [number, number])
+        .setLngLat(coordinates)
         .setHTML(popupContent)
         .addTo(newMap);
     });
@@ -197,7 +202,7 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       // Add locations source and layer
       currentMap.addSource('locations', {
         type: 'geojson',
-        data: locations
+        data: locations as unknown as GeoJSON.FeatureCollection<GeoJSON.Geometry>
       });
 
       currentMap.addLayer({
@@ -224,7 +229,7 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       if (transports && showTransports) {
         currentMap.addSource('transports', {
           type: 'geojson',
-          data: transports
+          data: transports as unknown as GeoJSON.FeatureCollection<GeoJSON.Geometry>
         });
 
         currentMap.addLayer({
@@ -248,8 +253,8 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       // Calculate bounds for locations
       if (locations.features.length > 0) {
         const bounds = new mapboxgl.LngLatBounds();
-        locations.features.forEach((feature: any) => {
-          bounds.extend(feature.geometry.coordinates as [number, number]);
+        locations.features.forEach((feature: LocationFeature) => {
+          bounds.extend(feature.geometry.coordinates);
         });
 
         currentMap.fitBounds(bounds, {
