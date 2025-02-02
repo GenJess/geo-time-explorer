@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import { useToast } from "@/components/ui/use-toast";
+import { processLocationData } from '@/utils/locationProcessor';
 
 interface FileUploadProps {
   onFileProcessed: (geoJson: any) => void;
@@ -12,67 +13,15 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileProcessed }) => {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
+      const geoJson = processLocationData(data);
       
-      // Convert to GeoJSON
-      const features: any[] = [];
-      
-      // Process each entry in the JSON array
-      data.forEach((entry: any) => {
-        // Handle timeline paths
-        if (entry.timelinePath) {
-          entry.timelinePath.forEach((path: any) => {
-            if (path.point) {
-              const [lat, lng] = path.point.replace('geo:', '').split(',').map(Number);
-              if (!isNaN(lat) && !isNaN(lng)) {
-                features.push({
-                  type: 'Feature',
-                  geometry: {
-                    type: 'Point',
-                    coordinates: [lng, lat] // Note: GeoJSON uses [longitude, latitude]
-                  },
-                  properties: {
-                    timestamp: entry.startTime,
-                    durationOffset: path.durationMinutesOffsetFromStartTime
-                  }
-                });
-              }
-            }
-          });
-        }
-        // Handle visit locations
-        else if (entry.visit?.topCandidate?.placeLocation) {
-          const [lat, lng] = entry.visit.topCandidate.placeLocation.replace('geo:', '').split(',').map(Number);
-          if (!isNaN(lat) && !isNaN(lng)) {
-            features.push({
-              type: 'Feature',
-              geometry: {
-                type: 'Point',
-                coordinates: [lng, lat] // Note: GeoJSON uses [longitude, latitude]
-              },
-              properties: {
-                timestamp: entry.startTime,
-                endTime: entry.endTime,
-                semanticType: entry.visit.topCandidate.semanticType,
-                probability: entry.visit.topCandidate.probability
-              }
-            });
-          }
-        }
-      });
-
-      console.log('Processed features:', features.length);
-
-      const geoJson = {
-        type: 'FeatureCollection',
-        features
-      };
-
-      console.log('First feature:', features[0]);
+      console.log('Processed features:', geoJson.features.length);
+      console.log('Sample feature:', geoJson.features[0]);
 
       onFileProcessed(geoJson);
       toast({
         title: "Success",
-        description: `Processed ${features.length} locations successfully`,
+        description: `Processed ${geoJson.features.length} locations successfully`,
       });
     } catch (error) {
       console.error('Error processing file:', error);

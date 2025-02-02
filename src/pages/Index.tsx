@@ -4,6 +4,7 @@ import Map from '@/components/Map';
 import { Timeline } from '@/components/Timeline';
 import { Card, CardContent } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
+import { filterDataByYear, getYearRange } from '@/utils/locationProcessor';
 
 const Index = () => {
   const [geoJsonData, setGeoJsonData] = useState<any>(null);
@@ -13,16 +14,25 @@ const Index = () => {
 
   useEffect(() => {
     if (geoJsonData) {
-      const filtered = {
-        type: 'FeatureCollection',
-        features: geoJsonData.features.filter((feature: any) => {
-          const date = new Date(feature.properties.startTime);
-          return date.getFullYear() === selectedYear;
-        })
-      };
+      // Update year range based on actual data
+      const range = getYearRange(geoJsonData);
+      setYearRange(range);
+      setSelectedYear(range[1]); // Set to most recent year
+      
+      // Filter data for selected year
+      const filtered = filterDataByYear(geoJsonData, selectedYear);
+      console.log(`Filtered ${filtered.features.length} locations for year ${selectedYear}`);
       setFilteredData(filtered);
     }
-  }, [geoJsonData, selectedYear]);
+  }, [geoJsonData]);
+
+  useEffect(() => {
+    if (geoJsonData) {
+      const filtered = filterDataByYear(geoJsonData, selectedYear);
+      console.log(`Filtered ${filtered.features.length} locations for year ${selectedYear}`);
+      setFilteredData(filtered);
+    }
+  }, [selectedYear]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
