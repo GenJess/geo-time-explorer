@@ -6,6 +6,15 @@ interface MapProps {
   geoJsonData?: any;
 }
 
+interface LocationFeature extends GeoJSON.Feature {
+  geometry: GeoJSON.Point;
+  properties: {
+    timestamp: string;
+    endTime?: string;
+    semanticType?: string;
+  };
+}
+
 const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -51,8 +60,11 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
     newMap.on('click', 'locations', (e) => {
       if (!e.features?.[0]) return;
       
-      const coordinates = e.features[0].geometry.coordinates.slice();
-      const properties = e.features[0].properties;
+      const feature = e.features[0] as LocationFeature;
+      if (feature.geometry.type !== 'Point') return;
+      
+      const coordinates = feature.geometry.coordinates.slice();
+      const properties = feature.properties;
       
       // Format the popup content
       const startTime = new Date(properties.timestamp).toLocaleString();
@@ -73,7 +85,7 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
         closeOnClick: true,
         maxWidth: '300px'
       })
-        .setLngLat(coordinates)
+        .setLngLat(coordinates as [number, number])
         .setHTML(popupContent)
         .addTo(newMap);
     });
@@ -207,7 +219,7 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   return (
     <div className="relative w-full h-full min-h-[500px]">
       <div ref={mapContainer} className="absolute inset-0 rounded-lg overflow-hidden" />
-      <style jsx global>{`
+      <style>{`
         .location-popup {
           @apply bg-background border border-border rounded-lg shadow-lg;
         }
