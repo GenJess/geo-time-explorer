@@ -47,6 +47,50 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
       setMapLoaded(true);
     });
 
+    // Add click event for markers
+    newMap.on('click', 'locations', (e) => {
+      if (!e.features?.[0]) return;
+      
+      const coordinates = e.features[0].geometry.coordinates.slice();
+      const properties = e.features[0].properties;
+      
+      // Format the popup content
+      const startTime = new Date(properties.timestamp).toLocaleString();
+      const endTime = properties.endTime ? new Date(properties.endTime).toLocaleString() : 'N/A';
+      const locationType = properties.semanticType || 'Unknown location type';
+      
+      const popupContent = `
+        <div class="p-2">
+          <p class="font-semibold">${locationType}</p>
+          <p class="text-sm">Start: ${startTime}</p>
+          <p class="text-sm">End: ${endTime}</p>
+        </div>
+      `;
+
+      new mapboxgl.Popup({
+        className: 'location-popup animate-fade-up',
+        closeButton: true,
+        closeOnClick: true,
+        maxWidth: '300px'
+      })
+        .setLngLat(coordinates)
+        .setHTML(popupContent)
+        .addTo(newMap);
+    });
+
+    // Change cursor to pointer when hovering locations
+    newMap.on('mouseenter', 'locations', () => {
+      if (newMap.getCanvas()) {
+        newMap.getCanvas().style.cursor = 'pointer';
+      }
+    });
+
+    newMap.on('mouseleave', 'locations', () => {
+      if (newMap.getCanvas()) {
+        newMap.getCanvas().style.cursor = '';
+      }
+    });
+
     map.current = newMap;
 
     return () => {
@@ -87,7 +131,7 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
         currentMap.removeSource('locations');
       }
 
-      // Add new source and layer
+      // Add new source and layer with animations
       currentMap.addSource('locations', {
         type: 'geojson',
         data: geoJsonData
@@ -98,11 +142,28 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
         type: 'circle',
         source: 'locations',
         paint: {
-          'circle-radius': 6,
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            0, 3,
+            22, 8
+          ],
           'circle-color': '#4A90E2',
-          'circle-opacity': 0.8,
+          'circle-opacity': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false],
+            1,
+            0.8
+          ],
           'circle-stroke-width': 2,
-          'circle-stroke-color': '#FFFFFF'
+          'circle-stroke-color': '#FFFFFF',
+          'circle-stroke-opacity': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false],
+            1,
+            0.6
+          ]
         }
       });
 
@@ -134,7 +195,8 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
 
         currentMap.fitBounds(bounds, {
           padding: 50,
-          duration: 1000
+          duration: 2000,
+          essential: true
         });
       }
     } catch (error) {
@@ -145,6 +207,20 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
   return (
     <div className="relative w-full h-full min-h-[500px]">
       <div ref={mapContainer} className="absolute inset-0 rounded-lg overflow-hidden" />
+      <style jsx global>{`
+        .location-popup {
+          @apply bg-background border border-border rounded-lg shadow-lg;
+        }
+        .location-popup .mapboxgl-popup-content {
+          @apply bg-background text-foreground p-0 rounded-lg border-none shadow-none;
+        }
+        .location-popup .mapboxgl-popup-close-button {
+          @apply text-foreground hover:text-primary transition-colors;
+        }
+        .location-popup .mapboxgl-popup-tip {
+          @apply border-t-background;
+        }
+      `}</style>
     </div>
   );
 };
