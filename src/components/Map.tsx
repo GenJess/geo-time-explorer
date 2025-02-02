@@ -6,12 +6,17 @@ interface MapProps {
   geoJsonData?: any;
 }
 
-interface LocationFeature extends GeoJSON.Feature {
-  geometry: GeoJSON.Point;
+interface LocationFeature {
+  type: 'Feature';
+  geometry: {
+    type: 'Point';
+    coordinates: [number, number];
+  };
   properties: {
     timestamp: string;
     endTime?: string;
     semanticType?: string;
+    probability?: string;
   };
 }
 
@@ -60,16 +65,13 @@ const Map: React.FC<MapProps> = ({ geoJsonData }) => {
     newMap.on('click', 'locations', (e) => {
       if (!e.features?.[0]) return;
       
-      const feature = e.features[0] as LocationFeature;
-      if (feature.geometry.type !== 'Point') return;
-      
-      const coordinates = feature.geometry.coordinates.slice();
-      const properties = feature.properties;
+      const feature = e.features[0].properties;
+      const coordinates = e.features[0].geometry.coordinates.slice();
       
       // Format the popup content
-      const startTime = new Date(properties.timestamp).toLocaleString();
-      const endTime = properties.endTime ? new Date(properties.endTime).toLocaleString() : 'N/A';
-      const locationType = properties.semanticType || 'Unknown location type';
+      const startTime = new Date(feature.timestamp).toLocaleString();
+      const endTime = feature.endTime ? new Date(feature.endTime).toLocaleString() : 'N/A';
+      const locationType = feature.semanticType || 'Unknown location type';
       
       const popupContent = `
         <div class="p-2">
